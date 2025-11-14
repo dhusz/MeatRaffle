@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Meat Raffle Card Controller</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #1E1C4C;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #F25C19;
+        }
+
+        fieldset {
+            border: 1px solid #666;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            width: 90%;
+            max-width: 600px;
+        }
+
+        legend {
+            color: #f25c19;
+            font-weight: bold;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .radio-group label {
+            display: inline-block;
+            background: #333;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: 0.2s;
+            user-select: none;
+        }
+
+        .radio-group input[type="radio"] {
+            display: none;
+        }
+
+        .radio-group input[type="radio"]:checked+label {
+            background: #F25C19;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        button {
+            font-size: 20px;
+            background: #F25C19;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 20px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #ff763c;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 20px;
+            justify-content:center;
+            align-items: center;
+            flex-direction: row;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        #remaining {
+            margin-top: 15px;
+            font-size: 18px;
+            color: #ccc;
+        }
+
+        #history {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        #history img {
+            width: 50px;
+            border-radius: 5px;
+            box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+    <h1>&#x1F0CF; Card Controller</h1>
+
+    <fieldset>
+        <legend>Select Rank</legend>
+        <div class="radio-group" id="rankGroup">
+            <input type="radio" name="rank" id="A" value="A"><label for="A">A</label>
+            <input type="radio" name="rank" id="2" value="2"><label for="2">2</label>
+            <input type="radio" name="rank" id="3" value="3"><label for="3">3</label>
+            <input type="radio" name="rank" id="4" value="4"><label for="4">4</label>
+            <input type="radio" name="rank" id="5" value="5"><label for="5">5</label>
+            <input type="radio" name="rank" id="6" value="6"><label for="6">6</label>
+            <input type="radio" name="rank" id="7" value="7"><label for="7">7</label>
+            <input type="radio" name="rank" id="8" value="8"><label for="8">8</label>
+            <input type="radio" name="rank" id="9" value="9"><label for="9">9</label>
+            <input type="radio" name="rank" id="10" value="0"><label for="10">10</label>
+            <input type="radio" name="rank" id="J" value="J"><label for="J">J</label>
+            <input type="radio" name="rank" id="Q" value="Q"><label for="Q">Q</label>
+            <input type="radio" name="rank" id="K" value="K"><label for="K">K</label>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Select Suit</legend>
+        <div class="radio-group" id="suitGroup">
+            <input type="radio" name="suit" id="hearts" value="H"><label for="hearts">♥ Hearts</label>
+            <input type="radio" name="suit" id="diamonds" value="D"><label for="diamonds">♦ Diamonds</label>
+            <input type="radio" name="suit" id="clubs" value="C"><label for="clubs">♣ Clubs</label>
+            <input type="radio" name="suit" id="spades" value="S"><label for="spades">♠ Spades</label>
+        </div>
+    </fieldset>
+
+    <div class="button-group">
+        <button id="showCard">Show Card</button>
+        <button id="undo">⤺ Undo</button>
+        <button id="newGame">🔁 New Game</button>
+    </div>
+
+    <div id="remaining"></div>
+    <ol id="history"></ol>
+
+    <script>
+    const ws = new WebSocket('ws://localhost:8080');
+    const historyList = document.getElementById('history');
+    const showBtn = document.getElementById('showCard');
+    const newGameBtn = document.getElementById('newGame');
+    const undoBtn = document.getElementById('undo');
+    
+    let deck = [];
+    let history = [];
+    let currentCard = null;
+    // Build a full deck
+    const ranks = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"];
+    const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
+
+    function buildDeck() {
+        deck = [];
+        for (let s of suits) {
+            for (let r of ranks) {
+                deck.push(`${r}_of_${s}`);
+            }
+        }
+    }
+
+    function updateHistoryDisplay() {
+        historyList.innerHTML = '';
+        history.forEach(card => {
+            if(card.length !== 2){
+                console.log('inalid card', card);
+                return;
+            }
+            const li = document.createElement('li');
+            li.textContent = `${getRankLabel(card[0])} of ${getSuitLabel(card[1])}`;
+            historyList.appendChild(li);
+        });
+    }
+
+    function getCardImage(rank, suit) {
+        return `https://deckofcardsapi.com/static/img/${rank}${suit}.png`;
+    }
+
+    function getSuitLabel(suit){
+        switch (suit) {
+            case "H":
+                return "Hearts";
+            case "D":
+                return "Diamonds";
+            case "C":
+                return "Clubs";
+            case "S":
+                return "Spades";
+            default:
+                alert("Invalid card suit")
+                break;
+        }
+
+        return suitLabel;
+    }
+
+    function getRankLabel(rank){
+        switch (rank) {
+            case "1":
+            case "A":
+                return 'Ace';
+            case "11":
+            case "J":
+                return 'Jack';
+            case "12":
+            case "Q":
+                return 'Queen';
+            case "13":
+            case "K":
+                return 'King'
+            case "0":
+                return "10";
+            default:
+                return rank;
+        }
+    }
+
+    function clearSelection(){
+        // Clear radio selections
+        document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    }
+
+    function createCurrentCard(rank, suit){       
+        const image = getCardImage(rank, suit);
+
+        let suitLabel = getSuitLabel(suit);
+        let rankLabel = getRankLabel(rank);
+        const label = `${rank} of ${suit}`;
+
+        return {
+            id: `${rankLabel}_of_${suitLabel}`,
+            label,
+            image,
+            code: `${rank}${suit}`
+        }
+    }
+
+    showBtn.onclick = () => {
+        const rank = document.querySelector('input[name="rank"]:checked')?.value;
+        const suit = document.querySelector('input[name="suit"]:checked')?.value;
+        if (!rank || !suit) return alert('Select rank and suit first!');
+        
+        currentCard = createCurrentCard(rank, suit);
+        
+        console.log('show card:', currentCard.label);
+
+        if (!deck.includes(currentCard.id)) {
+            alert('That card has already been called.');
+            clearSelection();
+            return;
+        }
+
+        // Remove from deck
+        deck = deck.filter(c => c !== currentCard.id);
+
+        // add it to history at the beginning
+        history.unshift(currentCard.code);
+
+        // Send to display
+        ws.send(JSON.stringify({
+            type: 'card',
+            currentCard
+        }));
+
+        // Send updated history/remaining
+        ws.send(JSON.stringify({
+            type: 'history',
+            history,
+            remaining: deck.length
+        }));
+
+        updateHistoryDisplay();
+
+        clearSelection();
+    };
+
+    newGameBtn.onclick = () => {
+        buildDeck();
+        history = [];
+        updateHistoryDisplay();
+        currenCard = null;
+        ws.send(JSON.stringify({ type: 'reset' }));
+    };
+            
+    undoBtn.onclick = () => {
+        if (history.length === 0) return alert('No cards to undo.');
+
+        // remove first element of card history
+        const cardRemoved = history.shift();
+        console.log('undo', cardRemoved);
+
+        if(history.length > 0){
+            const newCurrent = history[0];
+            const rank = newCurrent[0];
+            const suit = newCurrent[1];
+
+            currentCard = createCurrentCard(rank, suit);
+            ws.send(JSON.stringify({ type: 'undo', currentCard, history }));
+        } else {
+            currentCard = null;
+            ws.send(JSON.stringify({type: 'syncState', history, currentCard}))
+        }
+        updateHistoryDisplay();
+        
+        // add the card back into the deck
+        let rankLabel = getRankLabel(cardRemoved[0]);
+        let suitLabel = getSuitLabel(cardRemoved[1]);
+
+        let cardId = `${rankLabel}_of_${suitLabel}`;
+        deck.push(cardId);
+        console.log('added card back to deck', cardId)
+    };
+
+    buildDeck();
+    ws.onopen = () => console.log("✅ Controller connected")
+    ws.onmessage = (e) => {
+        const data = JSON.parse(e.data)
+        if(data.type === "syncRequest"){
+            // Display current state to client
+            ws.send(JSON.stringify({
+                type: "syncState",
+                history,
+                currentCard
+            }))
+        }
+    }
+    </script>
+</body>
+
+</html>
